@@ -27,8 +27,10 @@ void loop() {
   {
     przycisk = 0;
   }
+  lcd.clear();
   lcd.setCursor(0,1);
   lcd.print(przycisk);
   lcd.setCursor(2,1);
   lcd.print(odczyt);
+  delay(100);
 }
