@@ -20,8 +20,9 @@ int stanLed = HIGH;
 unsigned long aktualnyCzas = 0;
 unsigned long zapisanyCzas = 0;
 const int kolorCzerwony = 1;
-int kolorZielony = 2;
-int kolorNiebieski = 3;
+const int kolorZielony = 2;
+const int kolorNiebieski = 3;
+int stanLED = HIGH;
 // int color = 0;
 
 void setup()
@@ -56,7 +57,14 @@ void LEDblink(int color)
     stanLed = !stanLed;
     digitalWrite(czerwony, stanLed);
     break;
-  
+  case kolorZielony:
+    stanLed = !stanLed;
+    digitalWrite(czerwony, stanLed);
+    break;
+  case kolorNiebieski:
+    stanLed = !stanLed;
+    digitalWrite(czerwony, stanLed);
+    break;
   default:
     break;
   }
@@ -69,6 +77,8 @@ void LEDtest()
   {
     zapisanyCzas = aktualnyCzas;
     LEDblink(kolorCzerwony);
+    //stanLED = !stanLED;
+    //digitalWrite(czerwony, stanLED);
   }
     
   // digitalWrite(czerwony, LOW);  //
@@ -88,10 +98,11 @@ void loop()
   LEDtest();
   if (digitalRead(przyciskOK) == LOW)
   {
-    digitalWrite(testLED, HIGH); 
+    digitalWrite(testLED, HIGH);
   }
   else
   {
     digitalWrite(testLED, LOW);
   }
+
 }
