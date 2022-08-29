@@ -28,6 +28,20 @@ int stanLED = HIGH;
 bool wybor = true;
 // int color = 0;
 
+void powitanie()
+{
+  lcd.setCursor(0, 0); //Ustawienie kursora
+  lcd.print("Ekran powitalny"); //Wyświetlenie tekstu powitalnego
+  lcd.setCursor(0, 1);
+  lcd.print("Wcisnij OK");
+  lcd.blink();
+   while (digitalRead(przyciskOK) == HIGH){
+   }
+  lcd.clear();
+  delay(1000);
+  lcd.noBlink();
+}
+
 void setup()
 {
   digitalWrite(czerwony, HIGH);
@@ -45,8 +59,7 @@ void setup()
   pinMode(przyciskRef, INPUT_PULLUP);
   pinMode(testLED, OUTPUT);
   lcd.begin(16, 2); //Deklaracja typu wyświetlacza
-  lcd.setCursor(0, 0); //Ustawienie kursora
-  lcd.print("Ekran powitalny"); //Wyświetlenie tekstu powitalnego
+  powitanie();
   }
 
 int bazowanie ()
@@ -55,7 +68,7 @@ int bazowanie ()
   lcd.setCursor(0, 0);
   lcd.print("Trwa bazowanie");
   lcd.setCursor(0, 1);
-  lcd.blink();
+  //lcd.blink();
   digitalWrite(czerwony, HIGH);
   digitalWrite(zielony, HIGH);
   digitalWrite(niebieski, HIGH);
@@ -79,6 +92,7 @@ int bazowanie ()
     pozycja = pozycja + zmianaPoz;
     delay(200);
   }
+  digitalWrite(niebieski, HIGH);
   return pozycja;
 }
 
@@ -155,7 +169,11 @@ void loop()
   if (wybor == true && digitalRead(przyciskOK) == LOW)
   {
     pozRefMin = bazowanie();
+    lcd.clear();
+    lcd.print("Baza 1:");
     lcd.setCursor(0, 1);
     lcd.print(pozRefMin);
+    exit(0);
   }
+  
 }
