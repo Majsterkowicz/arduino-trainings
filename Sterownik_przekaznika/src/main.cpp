@@ -8,6 +8,8 @@
 #define buttonPIN 12
 
 int mode = 0;                         //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
+int buttonState;
+int lastButtonState = HIGH;
 bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
@@ -16,6 +18,8 @@ unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia,
 unsigned long czas_aktualny = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
 
 
 void setup()
@@ -39,6 +43,7 @@ bool butt()
   bool buttonResult;
   while (digitalRead(buttonPIN) == LOW)
   { }
+  delay(100);
   return buttonResult = true;
 }
 
@@ -53,6 +58,7 @@ void standby()
     standbyON = true;
     heatON = false;
     cooldownON = false;
+    delay(2000);
   }
   if (digitalRead(buttonPIN) == LOW)
   {
@@ -76,7 +82,7 @@ void heat()
     czas_aktualny = millis();
     start_heat = czas_aktualny;
     heatON = true;
-    delay(100);
+    delay(2000);
   }
   if (heatON == true)
   {
