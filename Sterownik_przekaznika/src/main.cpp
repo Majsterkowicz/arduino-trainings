@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
 
 #define LEDzielony 8
 #define LEDczerwony 9
@@ -7,7 +9,8 @@
 #define przekaznik 11
 #define buttonPIN 12
 
-int mode = 0;                         //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
+Adafruit_7segment matrix = Adafruit_7segment();   //inicjalizacja wyświetlacza "matrix" jako obiekt klasy Adafruit_7degment_matrix
+int mode = 0;                                     //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
 int buttonState;
 int lastButtonState = HIGH;
 bool standbyON = false;
@@ -18,12 +21,16 @@ unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia,
 unsigned long czas_aktualny = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
-unsigned long lastDebounceTime = 0;
-unsigned long debounceDelay = 50;
+// unsigned long lastDebounceTime = 0;
+// unsigned long debounceDelay = 50;
 
 
 void setup()
 {
+  matrix.begin(0x70);                 // ustawienie portu dla wyświetlacza, wartość domyślna 0x70
+  matrix.blinkRate(0);                // ustawienie migania wyświetlacza 0-2 Hz, domyślnie "0" - brak migania
+  matrix.setBrightness(0);            // Ustawienie jasności wyświetlacza 0-15, domyślnie 0 - najciemniej
+
   pinMode(LEDzielony, OUTPUT);
   pinMode(LEDczerwony, OUTPUT);
   pinMode(LEDniebieski, OUTPUT);
@@ -59,7 +66,11 @@ void standby()
     heatON = false;
     cooldownON = false;
     delay(2000);
+    matrix.blinkRate(2);                  //włączenie migania na 1Hz
+    matrix.drawColon(true);               //włączenie dwukropka
+    matrix.writeDisplay();                //uruchomienie wyświetlania
   }
+
   if (digitalRead(buttonPIN) == LOW)
   {
     if (butt() == true)
@@ -125,25 +136,25 @@ void cooldown()
     {
       mode = 2;                                                   //jeżeli nie minął, pozostań w trybie 2-cooldown
     }
-    if ((start_cooldown + defaultCooldownTime) <= czas_aktualny)    //sprawdzenie, czy upłynął już domyślny czas studzenia
+    if ((start_cooldown + defaultCooldownTime) <= czas_aktualny)  //sprawdzenie, czy upłynął już domyślny czas studzenia
     {
       cooldownON = false;
-      mode = 0;                                                    //jeżeli czas upłynął, przełącz na tryb 0-standby
+      mode = 0;                                                   //jeżeli czas upłynął, przełącz na tryb 0-standby
     }
   }
 }
 
 void loop() {
-  if (mode == 0)
+  switch (mode)
   {
+  case 0:
     standby();
-  }
-  if (mode == 1)
-  {
+    break;
+  case 1:
     heat();
-  }
-  if (mode == 2)
-  {
+  case 2:
     cooldown();
+  default:
+    break;
   }
 }
