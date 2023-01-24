@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include "Adafruit_LEDBackpack.h"
 
 #define LEDzielony 8
 #define LEDczerwony 9
@@ -7,19 +8,19 @@
 #define przekaznik 11
 #define buttonPIN 12
 
+
+Adafruit_7segment matrix = Adafruit_7segment();
 int mode = 0;                         //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
-int buttonState;
-int lastButtonState = HIGH;
+int time_to_calc;
 bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
+bool colon_status = true;
 unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
 unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
-unsigned long czas_aktualny = 0;
+unsigned long previous_time = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
-unsigned long lastDebounceTime = 0;
-unsigned long debounceDelay = 50;
 
 
 void setup()
@@ -35,6 +36,10 @@ void setup()
   digitalWrite(LEDniebieski, HIGH);
   digitalWrite(przekaznik, HIGH);     //dla przekaźnika z załączaniem do GND, dla stanu HIGH przekaźnik jest wyłączony
 
+  matrix.begin(0x70);                 // ustawienie adresu wyświetlacza, wartość domyślna 0x70
+  matrix.blinkRate(0);                // ustawienie migania wyświetlacza, domyślnie 0 - brak migania
+  matrix.setBrightness(0);            // ustawienie jasności wyświetlacza, domyślnie 0 - minimum, 15 - max
+
   mode = 0;
 }
 
@@ -47,6 +52,19 @@ bool butt()
   return buttonResult = true;
 }
 
+int display_time (int t1) {
+  return int (t1 / 60 * 100 + t1 % 60);   // przeliczenie sekund na wartość do wyświetlenia na ekranie, minuty i sekundy
+}
+
+
+// metoda odejmująca sekundę i wyświetlająca wartość na wyświetlaczu
+void count_the_time (int t3) {
+  matrix.print(display_time(t3), DEC);
+  colon_status = !colon_status;
+  matrix.drawColon(colon_status);
+  matrix.writeDisplay();
+}
+
 void standby()
 {
   if (standbyON == false)
@@ -55,6 +73,13 @@ void standby()
     digitalWrite(LEDczerwony, HIGH);    //
     digitalWrite(LEDniebieski, HIGH);   //wyłączenie diodek czerwonej i niebieskiej
     digitalWrite(LEDzielony, LOW);      //załączenie diody zielonej
+    matrix.blinkRate(2);                // ustawienie migania na 1Hz
+    colon_status = true;
+    matrix.drawColon(true);     // uruchomienie dwukropka
+    matrix.writeDisplay();
+    time_to_calc = defaultHeatTime / 1000;
+    matrix.print(display_time(time_to_calc), DEC);
+    matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
     standbyON = true;
     heatON = false;
     cooldownON = false;
@@ -79,29 +104,42 @@ void heat()
     digitalWrite(LEDczerwony, LOW);     //załączenie diody czerwonej
     digitalWrite(LEDniebieski, HIGH);   //
     digitalWrite(LEDzielony, HIGH);     //wyłączenie diodek niebieskiej i zielonej
-    czas_aktualny = millis();
-    start_heat = czas_aktualny;
     heatON = true;
+    matrix.blinkRate(0);
+    colon_status = false;
+    matrix.drawColon(colon_status);
+    matrix.writeDisplay();
     delay(2000);
   }
   if (heatON == true)
   {
-    czas_aktualny = millis();
-    if ((start_heat + defaultHeatTime) > czas_aktualny)   //sprawdzenie, czy upłynął już domyślny czas grzania
+    start_heat = millis();
+    previous_time = start_heat;
+    if ((start_heat + defaultHeatTime) > millis())   //sprawdzenie, czy upłynął już domyślny czas grzania
     {
+      if (millis() - previous_time >= 1000UL)
+      {
+        previous_time = millis();
+        time_to_calc -= 1;
+        count_the_time(time_to_calc);
+      }
       if (digitalRead(buttonPIN) == LOW)                  //jeżeli nie, możemy wywołać zakończenie programu oraz przejście
       {                                                   //do podprogramu studzenia
         if (butt() == true)                               //taki zabieg można zrobić tylko raz przed upływem domyślnego czasu grzania
         {
           heatON = false;
           mode = 2;
+          matrix.print(0, DEC);
+          matrix.writeDisplay();
         }
       }
     }
-    if ((start_heat + defaultHeatTime) <= czas_aktualny)   //sprawdzenie, czy upłynął już domyślny czas grzania
+    if ((start_heat + defaultHeatTime) <= millis())   //sprawdzenie, czy upłynął już domyślny czas grzania
     {
       heatON = false;
       mode = 2;                                           //jeżeli tak, przejdź od razu do podprogramu studzenia
+      matrix.print(0, DEC);
+      matrix.writeDisplay();
     }
   }
 }
@@ -114,19 +152,31 @@ void cooldown()
     digitalWrite(LEDczerwony, HIGH);    //wyłączenie diody czerwonej
     digitalWrite(LEDniebieski, LOW);    //załączenie diody niebieskiej
     digitalWrite(LEDzielony, HIGH);     //wyłączenie diody zielonej
-    czas_aktualny = millis();
-    start_cooldown = czas_aktualny;
+    start_cooldown = millis();
+    previous_time = start_cooldown;
     cooldownON = true;                  //załączenie stanu studzenia na true
+    colon_status = false;
+    time_to_calc = defaultCooldownTime / 1000;
+    matrix.print(display_time(time_to_calc), DEC);
+    matrix.drawColon(colon_status);
+    matrix.writeDisplay();
   }
   if (cooldownON == true)
   {
-    czas_aktualny = millis();
-    if ((start_cooldown + defaultCooldownTime) > czas_aktualny)   //sprawdzenie, czy upłynął już domyślny czas studzenia
+    if ((start_cooldown + defaultCooldownTime) > millis())   //sprawdzenie, czy upłynął już domyślny czas studzenia
     {
-      mode = 2;                                                   //jeżeli nie minął, pozostań w trybie 2-cooldown
+      if (millis() - previous_time >= 1000UL)
+      {
+        previous_time = millis();
+        time_to_calc -= 1;
+        count_the_time(time_to_calc);
+      }
+      mode = 2;                                              //jeżeli nie minął, pozostań w trybie 2-cooldown
     }
-    if ((start_cooldown + defaultCooldownTime) <= czas_aktualny)    //sprawdzenie, czy upłynął już domyślny czas studzenia
+    if ((start_cooldown + defaultCooldownTime) <= millis())  //sprawdzenie, czy upłynął już domyślny czas studzenia
     {
+      matrix.print(0, DEC);
+      matrix.writeDisplay();
       cooldownON = false;
       mode = 0;                                                    //jeżeli czas upłynął, przełącz na tryb 0-standby
     }
