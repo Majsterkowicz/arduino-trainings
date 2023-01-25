@@ -16,8 +16,8 @@ bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
 bool colon_status = true;
-unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
-unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
+unsigned long defaultHeatTime = 60000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
+unsigned long defaultCooldownTime = 180000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
 unsigned long previous_time = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
@@ -75,16 +75,19 @@ void standby()
     digitalWrite(LEDzielony, LOW);      //załączenie diody zielonej
     matrix.blinkRate(2);                // ustawienie migania na 1Hz
     colon_status = true;
-    matrix.drawColon(true);     // uruchomienie dwukropka
+    matrix.drawColon(colon_status);     // uruchomienie dwukropka
     matrix.writeDisplay();
-    time_to_calc = defaultHeatTime / 1000;
-    matrix.print(display_time(time_to_calc), DEC);
-    matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
     standbyON = true;
     heatON = false;
     cooldownON = false;
     delay(2000);
   }
+  // Ważna uwaga, aby dwukropek był wyświetlony razem z wartością cyfrową
+  // konieczne jest ustawienie NAJPIERW metody "print", a następnie "drawColon"
+  time_to_calc = defaultHeatTime / 1000;
+  matrix.print((display_time(time_to_calc)), DEC);
+  matrix.drawColon(true);             // uruchomienie dwukropka
+  matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
   if (digitalRead(buttonPIN) == LOW)
   {
     if (butt() == true)
@@ -104,17 +107,19 @@ void heat()
     digitalWrite(LEDczerwony, LOW);     //załączenie diody czerwonej
     digitalWrite(LEDniebieski, HIGH);   //
     digitalWrite(LEDzielony, HIGH);     //wyłączenie diodek niebieskiej i zielonej
+    start_heat = millis();
+    previous_time = start_heat;
     heatON = true;
-    matrix.blinkRate(0);
     colon_status = false;
-    matrix.drawColon(colon_status);
+    // time_to_calc = 600;
+    matrix.blinkRate(0);
+    // matrix.print(display_time(time_to_calc), DEC);
+    // matrix.drawColon(colon_status);
     matrix.writeDisplay();
-    delay(2000);
+    delay(1000);
   }
   if (heatON == true)
   {
-    start_heat = millis();
-    previous_time = start_heat;
     if ((start_heat + defaultHeatTime) > millis())   //sprawdzenie, czy upłynął już domyślny czas grzania
     {
       if (millis() - previous_time >= 1000UL)
