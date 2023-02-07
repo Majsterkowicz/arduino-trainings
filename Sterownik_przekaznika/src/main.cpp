@@ -16,8 +16,8 @@ bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
 bool colon_status = true;
-unsigned long defaultHeatTime = 60000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
-unsigned long defaultCooldownTime = 180000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
+unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
+unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
 unsigned long previous_time = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
@@ -38,7 +38,7 @@ void setup()
 
   matrix.begin(0x70);                 // ustawienie adresu wyświetlacza, wartość domyślna 0x70
   matrix.blinkRate(0);                // ustawienie migania wyświetlacza, domyślnie 0 - brak migania
-  matrix.setBrightness(0);            // ustawienie jasności wyświetlacza, domyślnie 0 - minimum, 15 - max
+  matrix.setBrightness(1);            // ustawienie jasności wyświetlacza, domyślnie 0 - minimum, 15 - max
 
   mode = 0;
 }
@@ -73,7 +73,7 @@ void standby()
     digitalWrite(LEDczerwony, HIGH);    //
     digitalWrite(LEDniebieski, HIGH);   //wyłączenie diodek czerwonej i niebieskiej
     digitalWrite(LEDzielony, LOW);      //załączenie diody zielonej
-    matrix.blinkRate(2);                // ustawienie migania na 1Hz
+    // matrix.blinkRate(2);                // ustawienie migania na 1Hz w trybie Standby
     colon_status = true;
     matrix.drawColon(colon_status);     // uruchomienie dwukropka
     matrix.writeDisplay();
@@ -85,7 +85,7 @@ void standby()
   // Ważna uwaga, aby dwukropek był wyświetlony razem z wartością cyfrową
   // konieczne jest ustawienie NAJPIERW metody "print", a następnie "drawColon"
   time_to_calc = defaultHeatTime / 1000;
-  matrix.print((display_time(time_to_calc)), DEC);
+  // matrix.print((display_time(time_to_calc)), DEC);
   matrix.drawColon(true);             // uruchomienie dwukropka
   matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
   if (digitalRead(buttonPIN) == LOW)
@@ -180,7 +180,7 @@ void cooldown()
     }
     if ((start_cooldown + defaultCooldownTime) <= millis())  //sprawdzenie, czy upłynął już domyślny czas studzenia
     {
-      matrix.print(0, DEC);
+      matrix.clear();
       matrix.writeDisplay();
       cooldownON = false;
       mode = 0;                                                    //jeżeli czas upłynął, przełącz na tryb 0-standby
