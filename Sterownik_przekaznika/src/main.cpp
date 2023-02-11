@@ -12,6 +12,8 @@
 Adafruit_7segment matrix = Adafruit_7segment();
 int mode = 0;                         //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
 int time_to_calc;
+int odczytADC;
+int brightness = 0;
 bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
@@ -36,9 +38,14 @@ void setup()
   digitalWrite(LEDniebieski, HIGH);
   digitalWrite(przekaznik, HIGH);     //dla przekaźnika z załączaniem do GND, dla stanu HIGH przekaźnik jest wyłączony
 
+  // odczytADC = analogRead(A3);         //odczyt wartości z portu A3 (analog) z potencjometru
+  // brightness = map(odczytADC, 5, 1020, 0, 15);    //ustawienie wartości jasności wyświetlacza na podstawie odczytu z A3
+  // dla bezpieczeństwa podany jest zakres odczytu od 5 do 1020, a nie od 0 - 1023
+  // Wartości jasności wyświetlacza to 0- minimum, 15- maximum.
+
   matrix.begin(0x70);                 // ustawienie adresu wyświetlacza, wartość domyślna 0x70
   matrix.blinkRate(0);                // ustawienie migania wyświetlacza, domyślnie 0 - brak migania
-  matrix.setBrightness(1);            // ustawienie jasności wyświetlacza, domyślnie 0 - minimum, 15 - max
+  // matrix.setBrightness(brightness);   // ustawienie jasności wyświetlacza
 
   mode = 0;
 }
@@ -82,6 +89,9 @@ void standby()
     cooldownON = false;
     delay(2000);
   }
+  odczytADC = analogRead(A3);         //odczyt wartości z portu A3 (analog) z potencjometru
+  brightness = map(odczytADC, 5, 1020, 0, 15);
+  matrix.setBrightness(brightness);
   // Ważna uwaga, aby dwukropek był wyświetlony razem z wartością cyfrową
   // konieczne jest ustawienie NAJPIERW metody "print", a następnie "drawColon"
   time_to_calc = defaultHeatTime / 1000;
