@@ -6,6 +6,12 @@
 // 4. Some of the lines are moved to correct (better) positions to be executed when it is necessary.
 // 5. All commented and not used anymore lines - are deleted.
 
+// 18.02.2023 Update:
+// 1. Software reset is disabled
+// 2. Hardware + software reset is setup, A0 Pin as output to reset the driver
+// 3. Reset works on Standby for each 30sec without enabling the program
+// 4. Reset function is enabled after the cooldown time is gone.
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "Adafruit_LEDBackpack.h"
@@ -15,6 +21,8 @@
 #define LEDniebieski 10
 #define przekaznik 11
 #define buttonPIN 12
+// #define odczytADC A3                  //odczyt wartości z portu A3 (analog) z potencjometru
+// #define resetPin 7
 
 
 Adafruit_7segment matrix = Adafruit_7segment();
@@ -26,20 +34,25 @@ bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
 bool colon_status = true;
-unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600000
-unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1800000
+unsigned long defaultStandbyTime = 30000UL;     //domyślny czas dla standby, po jego zakończneiu następuje reset sterownika, 30.000ms (30sek)
+unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600.000ms
+unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1.800.000ms
 unsigned long previous_time = 0;
+unsigned long start_standby = 0;
 unsigned long start_heat = 0;
 unsigned long start_cooldown = 0;
 
 
 void setup()
 {
+  digitalWrite(A0, HIGH);             //ustawienie wyjścia na A0 w stan wysoki
+  pinMode(A0, OUTPUT);                //ustawienie portu A0 jako wyjście
   pinMode(LEDzielony, OUTPUT);
   pinMode(LEDczerwony, OUTPUT);
   pinMode(LEDniebieski, OUTPUT);
   pinMode(przekaznik, OUTPUT);
   pinMode(buttonPIN, INPUT_PULLUP);
+  pinMode(A3, INPUT_PULLUP);
 
   digitalWrite(LEDzielony, HIGH);
   digitalWrite(LEDczerwony, HIGH);    //dla RGB ze wspolną anodą (+), dla stanu HIGH diody nie świecą
@@ -58,7 +71,8 @@ void setup()
   // error_mess();
 }
 
-void error_mess ()    //metoda sygnalizująca błąd (brak) resetu programu. Konieczny reset ręczny
+//metoda sygnalizująca błąd (brak) resetu programu. Konieczny reset ręczny
+void error_mess ()
 {
   bool LED_stat = LOW;
   for (;;)            // wywołanie pęlti nieskończoej. Wszystkie diody migają razem.
@@ -71,7 +85,17 @@ void error_mess ()    //metoda sygnalizująca błąd (brak) resetu programu. Kon
   }
 }
 
-void(* resetFunc) (void) = 0; //deklaracja metody resetowania, adres 0
+//metoda resetująca sterownik hardware'owo, podanie stanu LOW na pin RESET powoduje reset sterownika
+void resetFunc()
+{
+  digitalWrite(LEDzielony, LOW);
+  digitalWrite(LEDczerwony, LOW);
+  digitalWrite(LEDniebieski, LOW);
+  delay(2000);
+  digitalWrite(A0, LOW);
+  delay(50);
+  error_mess();
+}
 
 
 bool butt()
@@ -106,16 +130,24 @@ void standby()
     colon_status = true;
     matrix.drawColon(colon_status);     // uruchomienie dwukropka
     matrix.writeDisplay();
+    time_to_calc = defaultStandbyTime / 1000;  //przeliczenie czasu standby na sekundy
+    start_standby = millis();
+    previous_time = start_standby;
     standbyON = true;
     heatON = false;
     cooldownON = false;
     delay(2000);
   }
   odczytADC = analogRead(A3);         //odczyt wartości z portu A3 (analog) z potencjometru
+  // resetFunc();
   brightness = map(odczytADC, 5, 1020, 0, 15);
   matrix.setBrightness(brightness);
   matrix.drawColon(true);             // uruchomienie dwukropka
   matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
+  if ((millis() - start_standby) > defaultStandbyTime)
+  {
+    resetFunc();
+  }
   if (digitalRead(buttonPIN) == LOW)
   {
     if (butt() == true)
