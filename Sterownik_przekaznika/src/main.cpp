@@ -1,4 +1,5 @@
 // 13.02.2023 Update:
+// V1.1
 // 1. Extra condition added to heat and cooldown mode, the "if" checks also the current mode
 // 2. Extra program to reset the arduino software, method is called after cooldown time end
 // 3. Error program implemented. Basing on current behaviour of driver, the method is called after calling the reset.
@@ -7,198 +8,241 @@
 // 5. All commented and not used anymore lines - are deleted.
 
 // 18.02.2023 Update:
+// V1.2
 // 1. Software reset is disabled
 // 2. Hardware + software reset is setup, A0 Pin as output to reset the driver
 // 3. Reset works on Standby for each 30sec without enabling the program
 // 4. Reset function is enabled after the cooldown time is gone.
 
+// 24.02.2023 Update:
+// V2.0
+// 1. Function resetFunc is out
+// 2. All polish names and comments are switched to english
+// 3. Method for lighting the LEDs is add
+// 4. A0 pin is out (previous used for hard reset)
+// 5. Default times for counters are declared as const variables
+// 6. One more mode is add, new set is: 0 - settings mode, 1 - Standby mode, 2 - Heating mode, 3 - Cooldown mode
+// 7. Settings mode is use to setup the brightness of display. buttonPin close the setting when pressed -> switch mode to 1 (Standby)
+// 8. A library for debouncing the button (ezButton) is add
+// 9. Previous buttonPin is replaced with object "buttonPin" of ezButton class, pin attached (12) is not changed
+// 10. If-s in main program loop are replaced by switch-case method
+// 11. ADCread variable is out AnalogRead(A3) is directly put into the next line with mapping
+// 12. The button method is out because of ezButton library use
+// 13. Variable start_standby is gone.
+// 14. defaultStandbyTime is gone.
+// 15. New method for counting the delay is add (simple_delay())
+// 16. All methods (standby, heat, cooldown) are changed basing on previous changes
+// 17. When cooldown is finished, program switched to mode 1. The settings mode is avaliable only once when power on the device or hard reset
+
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "Adafruit_LEDBackpack.h"
+#include "ezButton.h"
 
-#define LEDzielony 8
-#define LEDczerwony 9
-#define LEDniebieski 10
-#define przekaznik 11
-#define buttonPIN 12
-// #define odczytADC A3                  //odczyt wartości z portu A3 (analog) z potencjometru
-// #define resetPin 7
+#define LED_GREEN 8
+#define LED_RED 9
+#define LED_BLUE 10
+#define RelayOut 11
 
 
 Adafruit_7segment matrix = Adafruit_7segment();
-int mode = 0;                         //mode(tryb) przyjmuje wartości: 0-dla standby, 1-dla heat, 2-dla cooldown
-int time_to_calc;
-int odczytADC;
+ezButton buttonPIN(12);
+//mode of the driver: 0 - settings, 1 - standby, 2 - heat, 3 - cooldown
+int mode;
+int timeToCalc;
 int brightness = 0;
 bool standbyON = false;
 bool heatON = false;
 bool cooldownON = false;
-bool colon_status = true;
-unsigned long defaultStandbyTime = 30000UL;     //domyślny czas dla standby, po jego zakończneiu następuje reset sterownika, 30.000ms (30sek)
-unsigned long defaultHeatTime = 600000UL;        //domyślny czas dla grzania, finalnie wpisać 600.000ms
-unsigned long defaultCooldownTime = 1800000UL;   //domyślny czas dla studzenia, finalnie wpisać 1.800.000ms
-unsigned long previous_time = 0;
-unsigned long start_standby = 0;
-unsigned long start_heat = 0;
-unsigned long start_cooldown = 0;
+bool colonStatus = true;
+bool delayFinished = false;
+const unsigned long defaultHeatTime = 600000UL;        //default time for Heating, 10m x 60s x 1000
+const unsigned long defaultCooldownTime = 1800000UL;   //default time for Coolingdown, 30m x 60s x 1000
+const unsigned long defaultWaitTime = 1000UL;          //default time for simple delay after entereing to new mode
+const unsigned long blinkTime = 500UL;                 //default time for blinking
+unsigned long start_heat = 0UL;
+unsigned long start_cooldown = 0UL;
+unsigned long previous_time = 0UL;
 
 
 void setup()
 {
-  digitalWrite(A0, HIGH);             //ustawienie wyjścia na A0 w stan wysoki
-  pinMode(A0, OUTPUT);                //ustawienie portu A0 jako wyjście
-  pinMode(LEDzielony, OUTPUT);
-  pinMode(LEDczerwony, OUTPUT);
-  pinMode(LEDniebieski, OUTPUT);
-  pinMode(przekaznik, OUTPUT);
-  pinMode(buttonPIN, INPUT_PULLUP);
-  pinMode(A3, INPUT_PULLUP);
-
-  digitalWrite(LEDzielony, HIGH);
-  digitalWrite(LEDczerwony, HIGH);    //dla RGB ze wspolną anodą (+), dla stanu HIGH diody nie świecą
-  digitalWrite(LEDniebieski, HIGH);
-  digitalWrite(przekaznik, HIGH);     //dla przekaźnika z załączaniem do GND, dla stanu HIGH przekaźnik jest wyłączony
-
-  matrix.begin(0x70);                 // ustawienie adresu wyświetlacza, wartość domyślna 0x70
-  matrix.blinkRate(0);                // ustawienie migania wyświetlacza, domyślnie 0 - brak migania
-  // matrix.setBrightness(brightness);   // ustawienie jasności wyświetlacza
-
+  // setting the serial port, 9600 baud
+  Serial.begin(9600);
+  // setting the debounce time (in ms) for buttonPin
+  buttonPIN.setDebounceTime(50);
+  // default mode is Settings (0)
   mode = 0;
-  digitalWrite(LEDczerwony, LOW);
-  delay(500);
-  digitalWrite(LEDczerwony, HIGH);
-
-  // error_mess();
+  // setting the Inputs and Outputs
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(RelayOut, OUTPUT);
+  pinMode(A3, INPUT_PULLUP);
+  // setting display adress, default is 0x70
+  matrix.begin(0x70);
+  // disabling the Relay for safety
+  digitalWrite(RelayOut, HIGH);
+  standbyON = false;
+  heatON = false;
+  cooldownON = false;
 }
 
-//metoda sygnalizująca błąd (brak) resetu programu. Konieczny reset ręczny
-void error_mess ()
+
+// method to light the LEDs
+// output values for common anode (+), LOW in the LED ON, HIGH - OFF
+void LED_lighting (int m)
 {
-  bool LED_stat = LOW;
-  for (;;)            // wywołanie pęlti nieskończoej. Wszystkie diody migają razem.
+  switch (m)
   {
-    digitalWrite(LEDzielony, LED_stat);
-    digitalWrite(LEDczerwony, LED_stat);
-    digitalWrite(LEDniebieski, LED_stat);
-    delay(500);
-    LED_stat = !LED_stat;
+  case 1:
+    digitalWrite(LED_GREEN, LOW);
+    digitalWrite(LED_RED, HIGH);
+    digitalWrite(LED_BLUE, HIGH);
+    break;
+  
+  case 2:
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_RED, LOW);
+    digitalWrite(LED_BLUE, HIGH);
+    break;
+  
+  case 3:
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_RED, HIGH);
+    digitalWrite(LED_BLUE, LOW);
+    break;
+  
+  default:
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_RED, HIGH);
+    digitalWrite(LED_BLUE, HIGH);
+    break;
   }
 }
 
-//metoda resetująca sterownik hardware'owo, podanie stanu LOW na pin RESET powoduje reset sterownika
-void resetFunc()
+
+// calculate seconds into value to display on 4 digit display mm:ss
+int display_time (int t1)
 {
-  digitalWrite(LEDzielony, LOW);
-  digitalWrite(LEDczerwony, LOW);
-  digitalWrite(LEDniebieski, LOW);
-  delay(2000);
-  digitalWrite(A0, LOW);
-  delay(50);
-  error_mess();
+  return int (t1 / 60 * 100 + t1 % 60);
 }
 
 
-bool butt()
+// method for displaying values on LCD + colon blinking
+void count_the_time (int t3)
 {
-  // bool buttonResult;
-  while (digitalRead(buttonPIN) == LOW)
-  { }
-  delay(100);
-  return true;
-}
-
-int display_time (int t1) {
-  return int (t1 / 60 * 100 + t1 % 60);   // przeliczenie sekund na wartość do wyświetlenia na ekranie, minuty i sekundy
-}
-
-// wyświetlająca wartość na wyświetlaczu + zmiana stanu dwukropka
-void count_the_time (int t3) {
   matrix.print(display_time(t3), DEC);
-  colon_status = !colon_status;
-  matrix.drawColon(colon_status);
+  colonStatus = !colonStatus;
+  // IMPORTANT to make sure that colon is displayed, put the matrix.print line first, then matrix.drawColon, last: matrix.writeDisplay
+  matrix.drawColon(colonStatus);
   matrix.writeDisplay();
 }
 
-void standby()
+
+bool simple_delay ()
 {
-  if ((standbyON == false) & (mode == 0))
+  if (millis() - previous_time >= defaultWaitTime)
   {
-    digitalWrite(przekaznik, HIGH);     //profilaktyczne wyłączenie przekaźnika
-    digitalWrite(LEDczerwony, HIGH);    //
-    digitalWrite(LEDniebieski, HIGH);   //wyłączenie diodek czerwonej i niebieskiej
-    digitalWrite(LEDzielony, LOW);      //załączenie diody zielonej
-    colon_status = true;
-    matrix.drawColon(colon_status);     // uruchomienie dwukropka
-    matrix.writeDisplay();
-    time_to_calc = defaultStandbyTime / 1000;  //przeliczenie czasu standby na sekundy
-    start_standby = millis();
-    previous_time = start_standby;
-    standbyON = true;
-    heatON = false;
-    cooldownON = false;
-    delay(2000);
+    return true;
   }
-  odczytADC = analogRead(A3);         //odczyt wartości z portu A3 (analog) z potencjometru
-  // resetFunc();
-  brightness = map(odczytADC, 5, 1020, 0, 15);
-  matrix.setBrightness(brightness);
-  matrix.drawColon(true);             // uruchomienie dwukropka
-  matrix.writeDisplay();              // załączneie zmian w wyświetlaczu
-  if ((millis() - start_standby) > defaultStandbyTime)
+  else
   {
-    resetFunc();
-  }
-  if (digitalRead(buttonPIN) == LOW)
-  {
-    if (butt() == true)
-    {
-      standbyON = false;
-      cooldownON = false;
-      mode = 1;
-    }
+    return false;
   }
 }
 
+// a place where brightness of LCD display can be setup
+void settings ()
+{
+  bool LED_stat = LOW;
+  if (millis() - previous_time >= blinkTime)
+  {
+    previous_time = millis();
+    LED_stat = !LED_stat;
+    digitalWrite(LED_GREEN, LED_stat);
+    digitalWrite(LED_RED, LED_stat);
+    digitalWrite(LED_BLUE, LED_stat);
+  }
+  brightness = map((analogRead(A3)), 5, 1020, 0, 15);
+  matrix.blinkRate(2);
+  matrix.print(8888, DEC);
+  matrix.setBrightness(brightness);
+  matrix.drawColon(true);
+  matrix.writeDisplay();
+  if (buttonPIN.isPressed())
+  {
+    mode = 1;
+    matrix.blinkRate(0);
+    matrix.clear();
+    matrix.writeDisplay();
+  }
+}
+
+
+void standby()
+{
+  if (standbyON == false)
+  {
+    previous_time = millis();
+    LED_lighting(mode);
+    matrix.drawColon(true);
+    matrix.writeDisplay();
+    standbyON = true;
+  }
+  if (delayFinished == false)
+  {
+    delayFinished = simple_delay();
+  }
+  if (buttonPIN.isPressed() && delayFinished == true)
+  {
+    mode = 2;
+    standbyON = false;
+    delayFinished = false;
+  }
+}
+
+
 void heat()
 {
-  if ((heatON == false) & (mode == 1))
+  if (heatON == false)
   {
-    digitalWrite(przekaznik, LOW);          //załączenie przekaźnika
-    digitalWrite(LEDczerwony, LOW);         //załączenie diody czerwonej
-    digitalWrite(LEDniebieski, HIGH);       //
-    digitalWrite(LEDzielony, HIGH);         //wyłączenie diodek niebieskiej i zielonej
-    time_to_calc = defaultHeatTime / 1000;  //przeliczenie czasu grzania na sekundy
+    previous_time = millis();
     start_heat = millis();
-    previous_time = start_heat;
+    digitalWrite(RelayOut, LOW);            //turning the relay out ON
+    LED_lighting (mode);
+    timeToCalc = defaultHeatTime / 1000UL;  //calculating the default time to seconds
     heatON = true;
-    colon_status = false;
-    delay(1000);
   }
-  if ((heatON == true) & (mode == 1))
+  if (delayFinished == false)
   {
-    if ((start_heat + defaultHeatTime) > millis())   //sprawdzenie, czy upłynął już domyślny czas grzania
+    delayFinished = simple_delay();
+  }
+  if (delayFinished == true)
+  {
+    if (millis() - start_heat <= defaultHeatTime)        //checking the main time counter for heating, if false
     {
-      if (millis() - previous_time >= 1000UL)
+      if (millis() - previous_time >= 1000UL)             //checking the time for change the display
       {
         previous_time = millis();
-        time_to_calc -= 1;
-        count_the_time(time_to_calc);
+        timeToCalc -= 1;
+        count_the_time(timeToCalc);
       }
-      if (digitalRead(buttonPIN) == LOW)                  //jeżeli nie, możemy wywołać zakończenie programu oraz przejście
-      {                                                   //do podprogramu studzenia
-        if (butt() == true)                               //taki zabieg można zrobić tylko raz przed upływem domyślnego czasu grzania
-        {
-          heatON = false;
-          mode = 2;
-          matrix.print(0, DEC);
-          matrix.writeDisplay();
-        }
+      if (buttonPIN.isPressed())                  //checking the Trigger button state
+      {                                           //if button is pressed go to cooldown (mode3)
+        heatON = false;
+        delayFinished = false;
+        mode = 3;
+        matrix.print(0, DEC);
+        matrix.writeDisplay();
       }
     }
-    else if ((start_heat + defaultHeatTime) <= millis())   //sprawdzenie, czy upłynął już domyślny czas grzania
-    {
+    else if (millis() - start_heat > defaultHeatTime)   //checking the main time counter for heating, if true
+    {                                                   //if time is gone go to cooldown (mode3)
       heatON = false;
-      mode = 2;                                           //jeżeli tak, przejdź od razu do podprogramu studzenia
+      delayFinished = false;
+      mode = 3;
       matrix.print(0, DEC);
       matrix.writeDisplay();
     }
@@ -207,56 +251,60 @@ void heat()
 
 void cooldown()
 {
-  if ((cooldownON == false) & (mode == 2))              //sprawdzenie stanu dla podprogramu studzenia, domyślnie jest false
+  if (cooldownON == false)
   {
-    digitalWrite(przekaznik, HIGH);     //wyłączenie przekaźnika
-    digitalWrite(LEDczerwony, HIGH);    //wyłączenie diody czerwonej
-    digitalWrite(LEDniebieski, LOW);    //załączenie diody niebieskiej
-    digitalWrite(LEDzielony, HIGH);     //wyłączenie diody zielonej
+    previous_time = millis();
     start_cooldown = millis();
-    previous_time = start_cooldown;
-    cooldownON = true;                  //załączenie stanu studzenia na true
-    colon_status = false;
-    time_to_calc = defaultCooldownTime / 1000;  //przeliczenie czasu studzenia na sekundy
-    matrix.print(display_time(time_to_calc), DEC);
-    matrix.drawColon(colon_status);
-    matrix.writeDisplay();
+    digitalWrite(RelayOut, HIGH);             //turning the relay out OFF
+    LED_lighting (mode);
+    timeToCalc = defaultCooldownTime / 1000UL;  //calculating the default time to seconds
+    cooldownON = true;
   }
-  if ((cooldownON == true) & (mode == 2))
+  if (delayFinished == false)
   {
-    if ((start_cooldown + defaultCooldownTime) > millis())   //sprawdzenie, czy upłynął już domyślny czas studzenia
+    delayFinished = simple_delay();
+  }
+  if (delayFinished == true)
+  {
+    if (millis() - start_cooldown <= defaultCooldownTime)       //checking the main time counter for cooldown, if false
     {
       if (millis() - previous_time >= 1000UL)
       {
         previous_time = millis();
-        time_to_calc -= 1;
-        count_the_time(time_to_calc);
+        timeToCalc -= 1;
+        count_the_time(timeToCalc);
       }
-      mode = 2;                                              //jeżeli nie minął, pozostań w trybie 2-cooldown
     }
-    else if ((start_cooldown + defaultCooldownTime) <= millis())  //sprawdzenie, czy upłynął już domyślny czas studzenia
+    else if (millis() - start_cooldown > defaultCooldownTime)  //checking the main time counter for cooldown, if true
     {
+      cooldownON = false;
+      delayFinished = false;
+      mode = 1;
       matrix.clear();
       matrix.writeDisplay();
-      cooldownON = false;
-      resetFunc();                                          // wywołaj funkcję resetu
-      delay(2000);                                          // odczekaj 2s. Kod wykonywany, jeżeli reset nie przebiegnie pomyślnie
-      error_mess();                                         // wywołanie podprogramu error_mess, gdy nie nastąpi reset. Pętla nieskończona
     }
   }
 }
 
 void loop() {
-  if (mode == 0)
+  buttonPIN.loop();
+  switch (mode)
   {
+  case 0:
+    settings();
+    break;
+  case 1:
     standby();
-  }
-  if (mode == 1)
-  {
+    break;
+  case 2:
     heat();
-  }
-  if (mode == 2)
-  {
+    break;
+  case 3:
     cooldown();
+    break;
+  
+  default:
+    settings();
+    break;
   }
 }
