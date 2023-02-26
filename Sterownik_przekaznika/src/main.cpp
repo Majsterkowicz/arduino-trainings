@@ -34,15 +34,20 @@
 // 16. All methods (standby, heat, cooldown) are changed basing on previous changes
 // 17. When cooldown is finished, program switched to mode 1. The settings mode is avaliable only once when power on the device or hard reset
 
+// 26.02.2023 Update:
+// V2.01
+// 1. LEDstat variable is now as global
+// 2. Color LEDs are now declared with new names. Previous ones were the same as in Adafruit library for multi coloured displays
+
 
 #include <Arduino.h>
 #include <Wire.h>
 #include "Adafruit_LEDBackpack.h"
 #include "ezButton.h"
 
-#define LED_GREEN 8
-#define LED_RED 9
-#define LED_BLUE 10
+#define LEDgreen 8
+#define LEDred 9
+#define LEDblue 10
 #define RelayOut 11
 
 
@@ -57,6 +62,7 @@ bool heatON = false;
 bool cooldownON = false;
 bool colonStatus = true;
 bool delayFinished = false;
+bool LED_stat = false;
 const unsigned long defaultHeatTime = 600000UL;        //default time for Heating, 10m x 60s x 1000
 const unsigned long defaultCooldownTime = 1800000UL;   //default time for Coolingdown, 30m x 60s x 1000
 const unsigned long defaultWaitTime = 1000UL;          //default time for simple delay after entereing to new mode
@@ -75,9 +81,9 @@ void setup()
   // default mode is Settings (0)
   mode = 0;
   // setting the Inputs and Outputs
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LEDgreen, OUTPUT);
+  pinMode(LEDred, OUTPUT);
+  pinMode(LEDblue, OUTPUT);
   pinMode(RelayOut, OUTPUT);
   pinMode(A3, INPUT_PULLUP);
   // setting display adress, default is 0x70
@@ -97,27 +103,27 @@ void LED_lighting (int m)
   switch (m)
   {
   case 1:
-    digitalWrite(LED_GREEN, LOW);
-    digitalWrite(LED_RED, HIGH);
-    digitalWrite(LED_BLUE, HIGH);
+    digitalWrite(LEDgreen, LOW);
+    digitalWrite(LEDred, HIGH);
+    digitalWrite(LEDblue, HIGH);
     break;
   
   case 2:
-    digitalWrite(LED_GREEN, HIGH);
-    digitalWrite(LED_RED, LOW);
-    digitalWrite(LED_BLUE, HIGH);
+    digitalWrite(LEDgreen, HIGH);
+    digitalWrite(LEDred, LOW);
+    digitalWrite(LEDblue, HIGH);
     break;
   
   case 3:
-    digitalWrite(LED_GREEN, HIGH);
-    digitalWrite(LED_RED, HIGH);
-    digitalWrite(LED_BLUE, LOW);
+    digitalWrite(LEDgreen, HIGH);
+    digitalWrite(LEDred, HIGH);
+    digitalWrite(LEDblue, LOW);
     break;
   
   default:
-    digitalWrite(LED_GREEN, HIGH);
-    digitalWrite(LED_RED, HIGH);
-    digitalWrite(LED_BLUE, HIGH);
+    digitalWrite(LEDgreen, HIGH);
+    digitalWrite(LEDred, HIGH);
+    digitalWrite(LEDblue, HIGH);
     break;
   }
 }
@@ -156,14 +162,13 @@ bool simple_delay ()
 // a place where brightness of LCD display can be setup
 void settings ()
 {
-  bool LED_stat = LOW;
   if (millis() - previous_time >= blinkTime)
   {
     previous_time = millis();
     LED_stat = !LED_stat;
-    digitalWrite(LED_GREEN, LED_stat);
-    digitalWrite(LED_RED, LED_stat);
-    digitalWrite(LED_BLUE, LED_stat);
+    digitalWrite(LEDgreen, LED_stat);
+    digitalWrite(LEDred, LED_stat);
+    digitalWrite(LEDblue, LED_stat);
   }
   brightness = map((analogRead(A3)), 5, 1020, 0, 15);
   matrix.blinkRate(2);
