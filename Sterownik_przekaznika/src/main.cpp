@@ -39,6 +39,8 @@
 // 1. LEDstat variable is now as global
 // 2. Color LEDs are now declared with new names. Previous ones were the same as in Adafruit library for multi coloured displays
 
+// 16.06.2026 Update:
+// V2.02
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -50,10 +52,9 @@
 #define LEDblue 10
 #define RelayOut 11
 
-
 Adafruit_7segment matrix = Adafruit_7segment();
 ezButton buttonPIN(12);
-//mode of the driver: 0 - settings, 1 - standby, 2 - heat, 3 - cooldown
+// mode of the driver: 0 - settings, 1 - standby, 2 - heat, 3 - cooldown
 int mode;
 int timeToCalc;
 int brightness = 0;
@@ -63,14 +64,13 @@ bool cooldownON = false;
 bool colonStatus = true;
 bool delayFinished = false;
 bool LED_stat = false;
-const unsigned long defaultHeatTime = 600000UL;        //default time for Heating, 10m x 60s x 1000
-const unsigned long defaultCooldownTime = 1800000UL;   //default time for Coolingdown, 30m x 60s x 1000
-const unsigned long defaultWaitTime = 1000UL;          //default time for simple delay after entereing to new mode
-const unsigned long blinkTime = 500UL;                 //default time for blinking
+const unsigned long defaultHeatTime = 600000UL;      // default time for Heating, 10m x 60s x 1000
+const unsigned long defaultCooldownTime = 1800000UL; // default time for Coolingdown, 30m x 60s x 1000
+const unsigned long defaultWaitTime = 1000UL;        // default time for simple delay after entereing to new mode
+const unsigned long blinkTime = 500UL;               // default time for blinking
 unsigned long start_heat = 0UL;
 unsigned long start_cooldown = 0UL;
 unsigned long previous_time = 0UL;
-
 
 void setup()
 {
@@ -95,10 +95,9 @@ void setup()
   cooldownON = false;
 }
 
-
 // method to light the LEDs
 // output values for common anode (+), LOW in the LED ON, HIGH - OFF
-void LED_lighting (int m)
+void LED_lighting(int m)
 {
   switch (m)
   {
@@ -107,19 +106,19 @@ void LED_lighting (int m)
     digitalWrite(LEDred, HIGH);
     digitalWrite(LEDblue, HIGH);
     break;
-  
+
   case 2:
     digitalWrite(LEDgreen, HIGH);
     digitalWrite(LEDred, LOW);
     digitalWrite(LEDblue, HIGH);
     break;
-  
+
   case 3:
     digitalWrite(LEDgreen, HIGH);
     digitalWrite(LEDred, HIGH);
     digitalWrite(LEDblue, LOW);
     break;
-  
+
   default:
     digitalWrite(LEDgreen, HIGH);
     digitalWrite(LEDred, HIGH);
@@ -128,16 +127,14 @@ void LED_lighting (int m)
   }
 }
 
-
 // calculate seconds into value to display on 4 digit display mm:ss
-int display_time (int t1)
+int display_time(int t1)
 {
-  return int (t1 / 60 * 100 + t1 % 60);
+  return int(t1 / 60 * 100 + t1 % 60);
 }
 
-
 // method for displaying values on LCD + colon blinking
-void count_the_time (int t3)
+void count_the_time(int t3)
 {
   matrix.print(display_time(t3), DEC);
   colonStatus = !colonStatus;
@@ -146,8 +143,7 @@ void count_the_time (int t3)
   matrix.writeDisplay();
 }
 
-
-bool simple_delay ()
+bool simple_delay()
 {
   if (millis() - previous_time >= defaultWaitTime)
   {
@@ -160,7 +156,7 @@ bool simple_delay ()
 }
 
 // a place where brightness of LCD display can be setup
-void settings ()
+void settings()
 {
   if (millis() - previous_time >= blinkTime)
   {
@@ -185,7 +181,6 @@ void settings ()
   }
 }
 
-
 void standby()
 {
   if (standbyON == false)
@@ -208,16 +203,15 @@ void standby()
   }
 }
 
-
 void heat()
 {
   if (heatON == false)
   {
     previous_time = millis();
     start_heat = millis();
-    digitalWrite(RelayOut, LOW);            //turning the relay out ON
-    LED_lighting (mode);
-    timeToCalc = defaultHeatTime / 1000UL;  //calculating the default time to seconds
+    digitalWrite(RelayOut, LOW); // turning the relay out ON
+    LED_lighting(mode);
+    timeToCalc = defaultHeatTime / 1000UL; // calculating the default time to seconds
     heatON = true;
   }
   if (delayFinished == false)
@@ -226,16 +220,16 @@ void heat()
   }
   if (delayFinished == true)
   {
-    if (millis() - start_heat <= defaultHeatTime)        //checking the main time counter for heating, if false
+    if (millis() - start_heat <= defaultHeatTime) // checking the main time counter for heating, if false
     {
-      if (millis() - previous_time >= 1000UL)             //checking the time for change the display
+      if (millis() - previous_time >= 1000UL) // checking the time for change the display
       {
         previous_time = millis();
         timeToCalc -= 1;
         count_the_time(timeToCalc);
       }
-      if (buttonPIN.isPressed())                  //checking the Trigger button state
-      {                                           //if button is pressed go to cooldown (mode3)
+      if (buttonPIN.isPressed()) // checking the Trigger button state
+      {                          // if button is pressed go to cooldown (mode3)
         heatON = false;
         delayFinished = false;
         mode = 3;
@@ -243,8 +237,8 @@ void heat()
         matrix.writeDisplay();
       }
     }
-    else if (millis() - start_heat > defaultHeatTime)   //checking the main time counter for heating, if true
-    {                                                   //if time is gone go to cooldown (mode3)
+    else if (millis() - start_heat > defaultHeatTime) // checking the main time counter for heating, if true
+    {                                                 // if time is gone go to cooldown (mode3)
       heatON = false;
       delayFinished = false;
       mode = 3;
@@ -260,9 +254,9 @@ void cooldown()
   {
     previous_time = millis();
     start_cooldown = millis();
-    digitalWrite(RelayOut, HIGH);             //turning the relay out OFF
-    LED_lighting (mode);
-    timeToCalc = defaultCooldownTime / 1000UL;  //calculating the default time to seconds
+    digitalWrite(RelayOut, HIGH); // turning the relay out OFF
+    LED_lighting(mode);
+    timeToCalc = defaultCooldownTime / 1000UL; // calculating the default time to seconds
     cooldownON = true;
   }
   if (delayFinished == false)
@@ -271,7 +265,7 @@ void cooldown()
   }
   if (delayFinished == true)
   {
-    if (millis() - start_cooldown <= defaultCooldownTime)       //checking the main time counter for cooldown, if false
+    if (millis() - start_cooldown <= defaultCooldownTime) // checking the main time counter for cooldown, if false
     {
       if (millis() - previous_time >= 1000UL)
       {
@@ -280,7 +274,7 @@ void cooldown()
         count_the_time(timeToCalc);
       }
     }
-    else if (millis() - start_cooldown > defaultCooldownTime)  //checking the main time counter for cooldown, if true
+    else if (millis() - start_cooldown > defaultCooldownTime) // checking the main time counter for cooldown, if true
     {
       cooldownON = false;
       delayFinished = false;
@@ -291,7 +285,8 @@ void cooldown()
   }
 }
 
-void loop() {
+void loop()
+{
   buttonPIN.loop();
   switch (mode)
   {
@@ -307,7 +302,7 @@ void loop() {
   case 3:
     cooldown();
     break;
-  
+
   default:
     settings();
     break;
